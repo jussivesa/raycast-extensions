@@ -14,7 +14,7 @@ Install 1Password CLI and sign in:
 ```zsh
 brew install 1password-cli
 op signin
-``
+```
 
 ### Commands
 - Get OTP: Select a label and copy or paste its OTP
