@@ -19,6 +19,8 @@ export default function Command() {
       input.ref = input.ref + "?attribute=otp";
     }
 
+    input.ref = input.ref.replace(/"/g, '');
+
     const created = await addPair(input.label, input.ref);
     setPairs((prev) => (Array.isArray(prev) ? [...prev, created] : [created]));
     await showToast({ style: Toast.Style.Success, title: "Pair added" });
