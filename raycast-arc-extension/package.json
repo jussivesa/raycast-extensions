@@ -1,0 +1,98 @@
+{
+    "name": "raycast-arc-extension",
+    "private": true,
+    "license": "MIT",
+    "version": "0.1.0",
+    "schemaVersion": 1,
+    "title": "Arc Workspace Switcher",
+    "author": "vesa",
+    "description": "Raycast extension to configure shortcuts for switching Arc browser workspaces to pre defined tab or pin.",
+    "icon": "icon.png",
+    "categories": [
+        "Extension Packs"
+    ],
+    "scripts": {
+        "build": "ray build -e dist -o ./dist --exit-on-error",
+        "dev": "ray develop",
+        "fix-lint": "ray lint --fix",
+        "lint": "ray lint",
+        "typecheck": "tsc -p . --noEmit",
+        "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
+        "publish": "npx @raycast/api@latest publish"
+    },
+    "dependencies": {
+        "@raycast/api": "^1.94.0",
+        "@raycast/utils": "^1.19.1"
+    },
+    "devDependencies": {
+        "@raycast/eslint-config": "^2.0.4",
+        "@types/node": "22.13.10",
+        "@types/react": "19.0.12",
+        "typescript": "^5.8.0"
+    },
+    "commands": [
+        {
+            "name": "open-mapped",
+            "title": "Open Workspace Tab",
+            "subtitle": "Use configured Arc workspace-tab mappings",
+            "description": "Search your configured mappings (alias, workspace, tab) and open the target in Arc.",
+            "mode": "view",
+            "icon": "icon.png",
+            "path": "src/open-mapped.tsx",
+            "keywords": ["arc", "workspace", "tab", "pinned", "favorite"],
+            "shortcuts": [
+                {
+                    "name": "openMappedShortcut",
+                    "description": "Open selected mapping",
+                    "default": "cmd+shift+o"
+                }
+            ]
+        },
+        {
+            "name": "open-by-alias",
+            "title": "Open by Alias",
+            "subtitle": "Type an alias to open",
+            "description": "Quick open: type a configured alias to switch Arc workspace and tab.",
+            "mode": "no-view",
+            "icon": "icon.png",
+            "path": "src/open-by-alias.tsx",
+            "arguments": [
+                {
+                    "name": "alias",
+                    "type": "text",
+                    "placeholder": "Alias (e.g., Abc Ltd Gmail)",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "manage-arc-shortcuts",
+            "title": "Manage Arc Shortcuts",
+            "subtitle": "Add, edit, or delete shortcuts",
+            "description": "Manage your Arc workspace-tab shortcuts using Raycast UI. Add, edit, delete, import, and export shortcuts.",
+            "mode": "view",
+            "icon": "icon.png",
+            "path": "src/manage-arc-shortcuts.tsx",
+            "keywords": ["arc", "manage", "shortcuts", "preferences", "settings"]
+        }
+    ],
+    "preferences": [
+        {
+            "name": "use_ui_scripting",
+            "title": "Use UI Scripting",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "description": "Enable UI scripting with System Events to switch Arc workspace via menu. Requires Accessibility permission for Raycast."
+        },
+        {
+            "name": "tab_modifier_key",
+            "title": "Tab Selection Modifier",
+            "type": "textfield",
+            "required": false,
+            "default": "command",
+            "placeholder": "command",
+            "description": "Modifier key for tab selection shortcuts (e.g., 'command' for Cmd+Number)."
+        }
+    ]
+}
