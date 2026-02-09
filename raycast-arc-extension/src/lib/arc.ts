@@ -126,7 +126,6 @@ async function openTabByIndex(index: number, modifierKey: string): Promise<boole
  */
 export async function openWorkspaceTab(
   mapping: WorkspaceTabMapping,
-  useUIScripting: boolean,
   modifierKey: string,
 ): Promise<void> {
   const toast = await showToast({
@@ -139,15 +138,7 @@ export async function openWorkspaceTab(
     // Step 1: Switch to the workspace
     let workspaceSwitched = false;
 
-    if (useUIScripting) {
       workspaceSwitched = await switchWorkspaceViaUI(mapping.workspaceName);
-    }
-
-    if (!workspaceSwitched) {
-      workspaceSwitched = await switchWorkspaceViaAppleScript(
-        mapping.workspaceName,
-      );
-    }
 
     if (!workspaceSwitched) {
       toast.style = Toast.Style.Failure;

@@ -8,8 +8,6 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 type ExtensionPreferences = {
-  /** Use UI Scripting - Enable UI scripting with System Events to switch Arc workspace via menu. Requires Accessibility permission for Raycast. */
-  "use_ui_scripting": boolean,
   /** Tab Selection Modifier - Modifier key for tab selection shortcuts (e.g., 'command' for Cmd+Number). */
   "tab_modifier_key": string
 }

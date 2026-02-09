@@ -78,14 +78,6 @@
     ],
     "preferences": [
         {
-            "name": "use_ui_scripting",
-            "title": "Use UI Scripting",
-            "type": "checkbox",
-            "required": false,
-            "default": true,
-            "description": "Enable UI scripting with System Events to switch Arc workspace via menu. Requires Accessibility permission for Raycast."
-        },
-        {
             "name": "tab_modifier_key",
             "title": "Tab Selection Modifier",
             "type": "textfield",

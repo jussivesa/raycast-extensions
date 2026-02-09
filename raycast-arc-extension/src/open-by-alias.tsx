@@ -9,7 +9,6 @@ import { findMappingByAlias, openWorkspaceTab } from "./lib/arc";
 import { loadShortcuts } from "./lib/storage";
 
 interface Preferences {
-  use_ui_scripting: boolean;
   tab_modifier_key: string;
 }
 
@@ -62,7 +61,6 @@ export default async function Command(
   // Open the workspace and tab
   await openWorkspaceTab(
     mapping,
-    preferences.use_ui_scripting,
     preferences.tab_modifier_key,
   );
 }

@@ -14,7 +14,6 @@ import {
 import { loadShortcuts } from "./lib/storage";
 
 interface Preferences {
-  use_ui_scripting: boolean;
   tab_modifier_key: string;
 }
 
@@ -76,12 +75,11 @@ export default function Command() {
     
     await openWorkspaceTab(
       mapping,
-      preferences.use_ui_scripting,
       preferences.tab_modifier_key,
     );
     
     isOpeningRef.current = false;
-  }, [preferences.use_ui_scripting, preferences.tab_modifier_key]);
+  }, [preferences.tab_modifier_key]);
 
   return (
     <List
