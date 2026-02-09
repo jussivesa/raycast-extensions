@@ -138,7 +138,7 @@ export async function openWorkspaceTab(
     // Step 1: Switch to the workspace
     let workspaceSwitched = false;
 
-      workspaceSwitched = await switchWorkspaceViaUI(mapping.workspaceName);
+    workspaceSwitched = await switchWorkspaceViaUI(mapping.workspaceName);
 
     if (!workspaceSwitched) {
       toast.style = Toast.Style.Failure;
@@ -146,9 +146,6 @@ export async function openWorkspaceTab(
       toast.message = `Could not switch to workspace: ${mapping.workspaceName}`;
       return;
     }
-
-    // Wait a bit for the workspace to switch
-    await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Step 2: Open the tab by index using keyboard shortcut
     const tabOpened = await openTabByIndex(mapping.tab.selector.index, modifierKey);
