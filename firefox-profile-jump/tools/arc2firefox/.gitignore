@@ -1,0 +1,5 @@
+# Machine-local data. Both are built by "capture" and hold absolute paths
+# and third-party binaries of this machine.
+profile-defaults.json
+extensions/
+__pycache__/
