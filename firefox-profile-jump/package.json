@@ -1,0 +1,129 @@
+{
+  "name": "firefox-profile-jump",
+  "private": true,
+  "license": "MIT",
+  "version": "0.1.0",
+  "schemaVersion": 1,
+  "title": "Firefox Profile Jump",
+  "author": "jussi.vesa@gmail.com",
+  "description": "Switch to the Firefox window of a given profile. Map a short display name to the exact Firefox profile name that Firefox shows in the window title.",
+  "icon": "icon.png",
+  "categories": [
+    "Applications",
+    "Productivity"
+  ],
+  "scripts": {
+    "build": "ray build -e dist -o ./dist --exit-on-error",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "typecheck": "tsc -p . --noEmit",
+    "install-local": "npm run build && rm -rf \"$HOME/.config/raycast/extensions/firefox-profile-jump\" && cp -R ./dist \"$HOME/.config/raycast/extensions/firefox-profile-jump\"",
+    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
+    "publish": "npx @raycast/api@latest publish"
+  },
+  "dependencies": {
+    "@raycast/api": "^1.94.0",
+    "@raycast/utils": "^1.19.1"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.0.4",
+    "@types/node": "22.13.10",
+    "@types/react": "19.0.12",
+    "typescript": "^5.8.0"
+  },
+  "commands": [
+    {
+      "name": "jump-to-profile",
+      "title": "Jump to Firefox Profile",
+      "subtitle": "Select a profile window",
+      "description": "Select a configured Firefox profile and bring its window to the front.",
+      "mode": "view",
+      "keywords": [
+        "firefox",
+        "profile",
+        "window",
+        "switch",
+        "focus"
+      ]
+    },
+    {
+      "name": "jump-to-profile-by-name",
+      "title": "Jump to Firefox Profile by Name",
+      "subtitle": "Type a display name",
+      "description": "Bring the Firefox window of one profile to the front. Assign a hotkey to a Quicklink of this command to get one hotkey per profile.",
+      "mode": "no-view",
+      "arguments": [
+        {
+          "name": "profile",
+          "type": "text",
+          "placeholder": "Display name (e.g. Work)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "refresh-window-cache",
+      "title": "Refresh Firefox Window Cache",
+      "subtitle": "Keeps the jump instant",
+      "description": "Read the Firefox windows and store which process serves each profile. Raycast also runs this every 10 minutes in the background, so that a jump by name needs no window read.",
+      "mode": "no-view",
+      "interval": "10m",
+      "keywords": [
+        "firefox",
+        "cache",
+        "refresh"
+      ]
+    },
+    {
+      "name": "manage-profiles",
+      "title": "Manage Firefox Profiles",
+      "subtitle": "Add, edit, or delete mappings",
+      "description": "Map a display name to the exact Firefox profile name. Detect the profiles of running Firefox windows.",
+      "mode": "view",
+      "keywords": [
+        "firefox",
+        "profile",
+        "mapping",
+        "settings"
+      ]
+    }
+  ],
+  "preferences": [
+    {
+      "name": "profiles_seed",
+      "title": "Seed Profile Mappings (optional)",
+      "type": "textfield",
+      "required": false,
+      "placeholder": "Work = Original profile",
+      "description": "Initial mappings. Use one 'Display Name = Exact Profile Name' per line, or a JSON array of { displayName, profileName, profilePath }. Read only while no mappings are stored yet."
+    },
+    {
+      "name": "process_name",
+      "title": "Firefox Process Name",
+      "type": "textfield",
+      "required": false,
+      "default": "firefox",
+      "placeholder": "firefox",
+      "description": "Name of the Firefox process as macOS reports it. Change this only for a non-standard build."
+    },
+    {
+      "name": "title_separator",
+      "title": "Window Title Separator",
+      "type": "textfield",
+      "required": false,
+      "default": "—",
+      "placeholder": "—",
+      "description": "Character that Firefox puts between the parts of the window title. Firefox uses an em dash."
+    },
+    {
+      "name": "title_suffixes",
+      "title": "Window Title Suffixes",
+      "type": "textfield",
+      "required": false,
+      "default": "Mozilla Firefox, Private Browsing",
+      "placeholder": "Mozilla Firefox, Private Browsing",
+      "description": "Comma-separated title parts that are not a profile name. Firefox appends these after the profile name. Translate them if your Firefox is not in English."
+    }
+  ]
+}
