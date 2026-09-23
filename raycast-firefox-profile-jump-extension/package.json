@@ -1,5 +1,5 @@
 {
-  "name": "firefox-profile-jump",
+  "name": "raycast-firefox-profile-jump-extension",
   "private": true,
   "license": "MIT",
   "version": "0.1.0",
@@ -18,7 +18,7 @@
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
     "typecheck": "tsc -p . --noEmit",
-    "install-local": "npm run build && rm -rf \"$HOME/.config/raycast/extensions/firefox-profile-jump\" && cp -R ./dist \"$HOME/.config/raycast/extensions/firefox-profile-jump\"",
+    "install-local": "npm run build && rm -rf \"$HOME/.config/raycast/extensions/raycast-firefox-profile-jump-extension\" && cp -R ./dist \"$HOME/.config/raycast/extensions/raycast-firefox-profile-jump-extension\"",
     "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
     "publish": "npx @raycast/api@latest publish"
   },

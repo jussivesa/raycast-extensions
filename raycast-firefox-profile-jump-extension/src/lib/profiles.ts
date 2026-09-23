@@ -194,5 +194,5 @@ export function resolveMapping(
 /** Build the Raycast deeplink that jumps to one profile. Use it to create a Quicklink for a hotkey. */
 export function jumpDeeplink(displayName: string): string {
   const args = encodeURIComponent(JSON.stringify({ profile: displayName }));
-  return `raycast://extensions/vesa/firefox-profile-jump/jump-to-profile-by-name?arguments=${args}`;
+  return `raycast://extensions/vesa/raycast-firefox-profile-jump-extension/jump-to-profile-by-name?arguments=${args}`;
 }

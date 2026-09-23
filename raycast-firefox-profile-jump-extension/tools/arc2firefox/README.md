@@ -57,7 +57,7 @@ The script needs no Python packages. Python 3.9 or later is required.
 Run the script from its own directory. It reads `profile-defaults.json` and
 the extension store from the directory that holds `arc2firefox.py`.
 
-    cd firefox-profile-jump/tools/arc2firefox
+    cd raycast-firefox-profile-jump-extension/tools/arc2firefox
 
     python3 arc2firefox.py export     # write the HTML backup files only
     python3 arc2firefox.py plan       # show the mapping and the settings summary

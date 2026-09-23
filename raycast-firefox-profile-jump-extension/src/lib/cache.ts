@@ -2,7 +2,9 @@ import { Cache } from "@raycast/api";
 import { FirefoxProcess, FirefoxWindow } from "./firefox";
 import { TitleFormat, detectProfiles } from "./profiles";
 
-const cache = new Cache({ namespace: "firefox-profile-jump" });
+const cache = new Cache({
+  namespace: "raycast-firefox-profile-jump-extension",
+});
 const CACHE_KEY = "profile-processes";
 
 /** The process that served one profile the last time the windows were read. */
