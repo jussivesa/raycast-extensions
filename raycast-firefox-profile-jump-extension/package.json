@@ -63,6 +63,21 @@
       ]
     },
     {
+      "name": "jump-to-last-profile",
+      "title": "Jump to Last Firefox Profile",
+      "subtitle": "Alternate between two profiles",
+      "description": "Bring the profile used before the one in front to the front. From another application it goes to the profile used last. Assign a hotkey to it.",
+      "mode": "no-view",
+      "keywords": [
+        "firefox",
+        "profile",
+        "last",
+        "previous",
+        "back",
+        "toggle"
+      ]
+    },
+    {
       "name": "refresh-window-cache",
       "title": "Refresh Firefox Window Cache",
       "subtitle": "Keeps the jump instant",

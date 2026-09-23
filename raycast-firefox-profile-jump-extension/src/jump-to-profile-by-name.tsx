@@ -1,6 +1,7 @@
 import { LaunchProps, closeMainWindow, showHUD } from "@raycast/api";
 import { updateProfileCache } from "./lib/cache";
 import { readFirefoxState } from "./lib/firefox";
+import { recordJump } from "./lib/history";
 import { jumpToProfile } from "./lib/jump";
 import {
   detectProfiles,
@@ -33,6 +34,7 @@ export default async function Command(
     // profile-to-process map from the last read still holds.
     if (mapping) {
       await jumpToProfile(mapping.profileName);
+      await recordJump(mapping.profileName);
       return;
     }
 
@@ -54,6 +56,7 @@ export default async function Command(
     }
 
     await jumpToProfile(profileName, { windows, format });
+    await recordJump(profileName);
   } catch (error) {
     await showHUD(
       `⚠️ ${error instanceof Error ? error.message : String(error)}`,

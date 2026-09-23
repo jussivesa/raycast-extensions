@@ -41,6 +41,18 @@ export function clearProfileCache(): void {
   cache.remove(CACHE_KEY);
 }
 
+/**
+ * Profile that the map holds for one process, in lower case.
+ *
+ * This answers which profile a window belongs to without a window read. Undefined
+ * when the map is older than the process.
+ */
+export function cachedProfileOfProcess(pid: number): string | undefined {
+  return Object.entries(readProfileCache()).find(
+    ([, entry]) => entry.pid === pid,
+  )?.[0];
+}
+
 /** Store the profile-to-process map that a window read produced. */
 export function updateProfileCache(
   windows: FirefoxWindow[],

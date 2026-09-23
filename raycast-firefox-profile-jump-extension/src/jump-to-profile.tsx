@@ -18,6 +18,7 @@ import {
   readFirefoxState,
 } from "./lib/firefox";
 import { updateProfileCache } from "./lib/cache";
+import { recordJump } from "./lib/history";
 import {
   ProfileMapping,
   detectProfiles,
@@ -127,14 +128,19 @@ export default function Command() {
     void reload();
   }, [reload]);
 
-  const jumpToWindow = useCallback(async (window: FirefoxWindow) => {
-    await closeMainWindow({ clearRootSearch: true });
-    try {
-      await activateFirefoxWindow(window.pid, window.index);
-    } catch (error) {
-      await reportFailure(error);
-    }
-  }, []);
+  const jumpToWindow = useCallback(
+    async (window: FirefoxWindow, profileName: string) => {
+      await closeMainWindow({ clearRootSearch: true });
+      try {
+        await activateFirefoxWindow(window.pid, window.index);
+        // "Jump to Last Firefox Profile" reads this history.
+        await recordJump(profileName);
+      } catch (error) {
+        await reportFailure(error);
+      }
+    },
+    [],
+  );
 
   const jumpToRow = useCallback(
     async (row: ProfileRow) => {
@@ -149,7 +155,7 @@ export default function Command() {
         });
         return;
       }
-      await jumpToWindow(target);
+      await jumpToWindow(target, row.profileName);
     },
     [jumpToWindow],
   );
@@ -211,7 +217,7 @@ export default function Command() {
                       key={`${window.pid}-${window.index}`}
                       title={windowLabel(window, position)}
                       icon={window.minimized ? Icon.Download : Icon.AppWindow}
-                      onAction={() => jumpToWindow(window)}
+                      onAction={() => jumpToWindow(window, row.profileName)}
                     />
                   ))}
                 </ActionPanel.Submenu>

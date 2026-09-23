@@ -24,6 +24,7 @@ On macOS the title has one of these two forms:
 | --- | --- | --- |
 | Jump to Firefox Profile | List | Select a profile and bring its window to the front. |
 | Jump to Firefox Profile by Name | Argument | Same action for one named profile. Use it for a hotkey. |
+| Jump to Last Firefox Profile | Hotkey | Alternate between the two profiles you use most. |
 | Manage Firefox Profiles | List | Add, edit, delete, and reorder the mappings. |
 | Refresh Firefox Window Cache | Background | Store which process serves each profile. Runs every 10 minutes. |
 
@@ -35,6 +36,7 @@ extension therefore stores which process serves each profile.
 | Step | Time |
 | --- | --- |
 | Jump by name, cache usable | about 0.6 s |
+| Jump to last profile, cache usable | about 0.7 s |
 | Jump by name, cache not usable | about 1.2 s |
 | Read every window title | about 0.6 s |
 
@@ -54,6 +56,28 @@ after a Firefox restart is slower.
 3. Press `Cmd+D`. Every running profile that has no mapping is added. The display name is set to
    the profile name.
 4. Edit a mapping with `Enter` to give it a shorter display name.
+
+## Jump back with one key
+
+**Jump to Last Firefox Profile** needs no name and no list. Give it a hotkey in
+Raycast Settings, for example `Cmd+Shift+B`. What it does depends on the window you
+are in:
+
+| You are in | The jump goes to |
+| --- | --- |
+| Any application that is not Firefox | The profile you used last |
+| A Firefox profile | The profile you used before that one |
+
+A second press of the hotkey goes back, so the two profiles you use most alternate
+with one key. Raycast has no chord hotkey, so this is a command of its own. It does
+not change what your existing hotkey for **Jump to Firefox Profile by Name** does.
+
+The history holds the last 5 profiles. Every jump of every command writes to it: the
+list command, the jump by name, and this command. A profile that is not in the
+history yet cannot be reached this way, so jump to it once by name or from the list.
+
+The command reads which application is in front. That costs about 60 ms and it uses
+AppKit, not the window titles, so the speed of the jump does not change.
 
 ## One hotkey per profile
 

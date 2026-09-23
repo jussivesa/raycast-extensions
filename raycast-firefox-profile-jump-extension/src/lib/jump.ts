@@ -1,6 +1,7 @@
 import { updateProfileCache, validCachedProfile } from "./cache";
 import {
   FirefoxControlError,
+  FirefoxProcess,
   FirefoxWindow,
   activateFirefoxWindow,
   listFirefoxProcesses,
@@ -23,7 +24,12 @@ import {
  */
 export async function jumpToProfile(
   profileName: string,
-  options?: { windows?: FirefoxWindow[]; format?: TitleFormat },
+  options?: {
+    windows?: FirefoxWindow[];
+    format?: TitleFormat;
+    /** Process list the caller already read. It saves one ps call. */
+    processes?: FirefoxProcess[];
+  },
 ): Promise<{ pid: number; windowIndex: number; fromCache: boolean }> {
   const format = options?.format ?? getTitleFormat();
   const processName = getProcessName();
@@ -35,7 +41,8 @@ export async function jumpToProfile(
     return { ...target, fromCache: false };
   }
 
-  const processes = await listFirefoxProcesses(processName);
+  const processes =
+    options?.processes ?? (await listFirefoxProcesses(processName));
   if (processes.length === 0) {
     throw new FirefoxControlError("Firefox is not running.");
   }

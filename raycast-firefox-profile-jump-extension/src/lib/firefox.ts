@@ -195,6 +195,29 @@ export async function readFirefoxState(
   return { processes, windows };
 }
 
+/**
+ * Process ID of the application that has the keyboard focus.
+ *
+ * AppKit answers this in about 60 ms. The AppleScript form, "first process whose
+ * frontmost is true", asks System Events for the attribute of every process and costs
+ * about 300 ms, which is too much for a hotkey.
+ *
+ * Undefined when the value cannot be read. The caller then treats the front
+ * application as one that is not Firefox.
+ */
+export async function frontmostProcessId(): Promise<number | undefined> {
+  try {
+    const stdout = await runOsascript(
+      'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier',
+      "JavaScript",
+    );
+    const pid = Number.parseInt(stdout.trim(), 10);
+    return Number.isInteger(pid) ? pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Read every window of every Firefox process. */
 export async function listFirefoxWindows(
   processName = "firefox",

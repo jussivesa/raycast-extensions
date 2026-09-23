@@ -26,6 +26,8 @@ declare namespace Preferences {
   export type JumpToProfile = ExtensionPreferences & {}
   /** Preferences accessible in the `jump-to-profile-by-name` command */
   export type JumpToProfileByName = ExtensionPreferences & {}
+  /** Preferences accessible in the `jump-to-last-profile` command */
+  export type JumpToLastProfile = ExtensionPreferences & {}
   /** Preferences accessible in the `refresh-window-cache` command */
   export type RefreshWindowCache = ExtensionPreferences & {}
   /** Preferences accessible in the `manage-profiles` command */
@@ -40,6 +42,8 @@ declare namespace Arguments {
   /** Display name (e.g. Work) */
   "profile": string
 }
+  /** Arguments passed to the `jump-to-last-profile` command */
+  export type JumpToLastProfile = {}
   /** Arguments passed to the `refresh-window-cache` command */
   export type RefreshWindowCache = {}
   /** Arguments passed to the `manage-profiles` command */
