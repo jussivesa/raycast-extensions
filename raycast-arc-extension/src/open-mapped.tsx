@@ -116,7 +116,7 @@ export default function Command() {
                 />
                 <Action.OpenInBrowser
                   title="Open Extension Preferences"
-                  url="raycast://extensions/raycast-arc-extension/preferences"
+                  url="raycast://extensions/jussivesa/raycast-arc-extension/preferences"
                   shortcut={{ modifiers: ["cmd", "shift"], key: "," }}
                 />
               </ActionPanel>

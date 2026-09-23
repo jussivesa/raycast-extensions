@@ -68,7 +68,7 @@ Raycast assigns one hotkey per command. To get one hotkey for each profile, crea
 Repeat for each profile. The Quicklink opens this deeplink:
 
 ```
-raycast://extensions/vesa/raycast-firefox-profile-jump-extension/jump-to-profile-by-name?arguments=%7B%22profile%22%3A%22Work%22%7D
+raycast://extensions/jussivesa/raycast-firefox-profile-jump-extension/jump-to-profile-by-name?arguments=%7B%22profile%22%3A%22Work%22%7D
 ```
 
 ## Actions

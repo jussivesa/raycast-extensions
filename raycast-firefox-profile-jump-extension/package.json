@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "schemaVersion": 1,
   "title": "Firefox Profile Jump",
-  "author": "jussi.vesa@gmail.com",
+  "author": "jussivesa",
   "description": "Switch to the Firefox window of a given profile. Map a short display name to the exact Firefox profile name that Firefox shows in the window title.",
   "icon": "icon.png",
   "categories": [

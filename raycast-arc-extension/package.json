@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "schemaVersion": 1,
     "title": "Arc Workspace Switcher",
-    "author": "jussi.vesa@gmail.com",
+    "author": "jussivesa",
     "description": "Raycast extension to configure shortcuts for switching Arc browser workspaces to pre defined tab or pin.",
     "icon": "icon.png",
     "categories": [

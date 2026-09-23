@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "schemaVersion": 1,
     "title": "1Password OTP",
-    "author": "jussi.vesa@gmail.com",
+    "author": "jussivesa",
     "description": "Raycast extension to fetch One-Time Passwords (OTPs) from 1Password CLI using user-configured label/reference pairs.",
     "icon": "icon.png",
     "categories": [
