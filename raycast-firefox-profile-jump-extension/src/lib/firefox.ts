@@ -3,7 +3,7 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-/** Field and record delimiters used by the AppleScript helpers. Window titles cannot contain them. */
+/** Field and record delimiters used by the automation helpers. Window titles cannot contain them. */
 const FIELD_SEPARATOR = "\u001F";
 const RECORD_SEPARATOR = "\u001E";
 
@@ -19,11 +19,37 @@ export interface FirefoxWindow {
   minimized: boolean;
 }
 
-/** One running Firefox instance, as reported by ps. */
+/** One running Firefox instance. */
 export interface FirefoxProcess {
   pid: number;
   /** Value of the -profile or --profile argument. Absent if Firefox started with the default profile. */
   profilePath?: string;
+  /**
+   * Start time of the process, in whole seconds since 1970.
+   *
+   * macOS gives the process ID of a stopped program to a new one. The start time tells
+   * the two apart, so a stored process ID is trusted only while this value still matches.
+   */
+  launchTime?: number;
+}
+
+/** One process to bring to the front. The first usable candidate wins. */
+export interface ActivationCandidate {
+  pid: number;
+  /** Value returned when this candidate is used. The caller maps it back to a profile. */
+  key: string;
+  /** Start time stored with the candidate. The candidate is rejected when it differs. */
+  launchTime?: number;
+  /** 1-based window to raise. Leave at 1 to raise the window the profile used last. */
+  windowIndex?: number;
+  /** Set when the window can be in the Dock. It costs one extra Accessibility read. */
+  restore?: boolean;
+}
+
+export interface ActivationResult {
+  /** Key of the candidate that was brought to the front. Absent when none was usable. */
+  key?: string;
+  pid?: number;
 }
 
 /** Raised when the automation helpers fail. Carries a message that the user can act on. */
@@ -37,7 +63,7 @@ function describeOsascriptError(error: unknown): string {
     message.includes("not allowed assistive access") ||
     message.includes("-25211")
   ) {
-    return "Raycast cannot control System Events. Open System Settings > Privacy & Security > Accessibility and allow Raycast.";
+    return "Raycast cannot control Firefox. Open System Settings > Privacy & Security > Accessibility and allow Raycast.";
   }
   if (
     message.includes("-600") ||
@@ -54,38 +80,47 @@ function describeOsascriptError(error: unknown): string {
   );
 }
 
-async function runOsascript(
-  script: string,
-  language?: "JavaScript",
-): Promise<string> {
-  const args = language ? ["-l", language, "-e", script] : ["-e", script];
+/**
+ * Turn a value into a JavaScript string literal that holds its JSON form.
+ *
+ * osascript takes the script as text, so every input has to be written into the script.
+ * JSON.stringify twice produces a literal that is safe for any profile name. The two
+ * line separators are legal in JSON but not in a JavaScript literal.
+ */
+function jsonLiteral(value: unknown): string {
+  return JSON.stringify(JSON.stringify(value))
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+async function runJxa(script: string): Promise<string> {
   try {
-    const { stdout } = await execFileAsync("/usr/bin/osascript", args, {
-      timeout: 15_000,
-      maxBuffer: 4 * 1024 * 1024,
-    });
+    const { stdout } = await execFileAsync(
+      "/usr/bin/osascript",
+      ["-l", "JavaScript", "-e", script],
+      { timeout: 15_000, maxBuffer: 4 * 1024 * 1024 },
+    );
     return stdout;
   } catch (error) {
     throw new FirefoxControlError(describeOsascriptError(error));
   }
 }
 
-/**
- * Build the specifier for one Firefox process.
- *
- * The specifier must be repeated in full at every use. AppleScript degrades a stored
- * process or window reference to one that names the application, and every profile runs
- * an application with the same name, so a stored reference resolves to the wrong profile.
- */
-function processRef(pid: number): string {
-  return `(first process whose unix id is ${pid})`;
+/** Part of the executable path that marks a Firefox process. */
+function executableMarker(processName: string): string {
+  return `/Contents/MacOS/${processName.trim() || "firefox"}`;
 }
 
-/** Read the running Firefox instances and the profile path each one was started with. */
+/**
+ * Read the running Firefox instances and the profile path each one was started with.
+ *
+ * Only the profile path needs ps. Every other reader uses AppKit, which answers by
+ * process ID and does not scan the process list.
+ */
 export async function listFirefoxProcesses(
   processName = "firefox",
 ): Promise<FirefoxProcess[]> {
-  const binary = `/Contents/MacOS/${processName.trim() || "firefox"}`;
+  const binary = executableMarker(processName);
 
   let stdout: string;
   try {
@@ -122,100 +157,131 @@ export async function listFirefoxProcesses(
 }
 
 /**
- * Read the windows of the given processes.
+ * Read every Firefox process and every window in one step.
  *
- * Titles and minimized states are read one list per process instead of one value per
- * window. Every extra value costs an Apple event, and a per-window loop is about three
- * times slower.
+ * The windows are read through the Accessibility API, which is addressed by process ID.
+ * The AppleScript form, "process whose unix id is", makes System Events read the unix id
+ * of every process on the machine, and it costs about 250 ms for each use. With eight
+ * profiles that form needs about 2.2 s. This one needs about 0.35 s.
+ *
+ * Each process also reports its start time. The caller stores that value with the window
+ * data, so that a later jump can check a stored process ID without a process list.
  */
-export async function listWindowsOfProcesses(
-  pids: number[],
-): Promise<FirefoxWindow[]> {
-  if (pids.length === 0) {
-    return [];
-  }
-
-  // A process can stop between the ps call and this script, so each block is guarded.
-  const blocks = pids
-    .map(
-      (pid) => `  try
-    set nameList to name of every window of ${processRef(pid)}
-    set minList to value of attribute "AXMinimized" of every window of ${processRef(pid)}
-    repeat with j from 1 to (count of nameList)
-      set winTitle to item j of nameList
-      if winTitle is missing value then set winTitle to ""
-      set winMinimized to "0"
-      try
-        if (item j of minList) is true then set winMinimized to "1"
-      end try
-      set out to out & "${pid}" & fieldSep & j & fieldSep & winMinimized & fieldSep & winTitle & recSep
-    end repeat
-  end try`,
-    )
-    .join("\n");
-
-  const stdout = await runOsascript(`
-set fieldSep to character id 31
-set recSep to character id 30
-set out to ""
-tell application "System Events"
-${blocks}
-end tell
-return out`);
-
-  return stdout
-    .split(RECORD_SEPARATOR)
-    .map((record) => record.trim())
-    .filter((record) => record.length > 0)
-    .map((record) => {
-      const [pid, index, minimized, ...titleParts] =
-        record.split(FIELD_SEPARATOR);
-      return {
-        pid: Number.parseInt(pid, 10),
-        index: Number.parseInt(index, 10),
-        minimized: minimized === "1",
-        // A title can never contain the field separator, but rejoin defensively.
-        title: titleParts.join(FIELD_SEPARATOR),
-      };
-    })
-    .filter(
-      (window) =>
-        Number.isInteger(window.pid) && Number.isInteger(window.index),
-    );
-}
-
-/** Read every Firefox process and every window in one step. */
 export async function readFirefoxState(
   processName = "firefox",
 ): Promise<{ processes: FirefoxProcess[]; windows: FirefoxWindow[] }> {
-  const processes = await listFirefoxProcesses(processName);
-  const windows = await listWindowsOfProcesses(
-    processes.map((process) => process.pid),
-  );
-  return { processes, windows };
-}
+  const marker = executableMarker(processName);
 
-/**
- * Process ID of the application that has the keyboard focus.
- *
- * AppKit answers this in about 60 ms. The AppleScript form, "first process whose
- * frontmost is true", asks System Events for the attribute of every process and costs
- * about 300 ms, which is too much for a hotkey.
- *
- * Undefined when the value cannot be read. The caller then treats the front
- * application as one that is not Firefox.
- */
-export async function frontmostProcessId(): Promise<number | undefined> {
-  try {
-    const stdout = await runOsascript(
-      'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier',
-      "JavaScript",
-    );
-    const pid = Number.parseInt(stdout.trim(), 10);
-    return Number.isInteger(pid) ? pid : undefined;
-  } catch {
-    return undefined;
+  const script = `ObjC.import("AppKit");
+ObjC.import("ApplicationServices");
+(function () {
+  const marker = JSON.parse(${jsonLiteral(marker)});
+  const fieldSep = String.fromCharCode(31);
+  const recSep = String.fromCharCode(30);
+
+  function axValue(element, name) {
+    const out = Ref();
+    if ($.AXUIElementCopyAttributeValue(element, $(name), out) !== 0) return null;
+    return ObjC.castRefToObject(out[0]);
   }
+
+  const records = [];
+  // Window titles need the Accessibility permission. Report it, so that an empty
+  // result can be told apart from a missing permission.
+  records.push([0, -1, $.AXIsProcessTrusted() ? 1 : 0, ""].join(fieldSep));
+
+  const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
+  for (let i = 0; i < apps.count; i++) {
+    const app = apps.objectAtIndex(i);
+    const url = app.executableURL;
+    if (url.isNil() || String(ObjC.unwrap(url.path)).indexOf(marker) === -1) continue;
+
+    const pid = app.processIdentifier;
+    const launchDate = app.launchDate;
+    records.push([pid, 0, launchDate.isNil() ? 0 : Math.round(launchDate.timeIntervalSince1970), ""].join(fieldSep));
+
+    const windows = axValue($.AXUIElementCreateApplication(pid), "AXWindows");
+    if (windows === null) continue;
+    const count = Number(windows.count);
+    let index = 0;
+    for (let j = 0; j < count; j++) {
+      const window = windows.objectAtIndex(j);
+      // A locked screen leaves an application element in the list. Keep real windows only.
+      const role = axValue(window, "AXRole");
+      if (role === null || String(ObjC.unwrap(role)) !== "AXWindow") continue;
+
+      const title = axValue(window, "AXTitle");
+      const minimized = axValue(window, "AXMinimized");
+      index += 1;
+      records.push([
+        pid,
+        index,
+        ObjC.unwrap(minimized) === true ? 1 : 0,
+        title === null ? "" : String(ObjC.unwrap(title))
+      ].join(fieldSep));
+    }
+  }
+  // The trailing separator turns the newline that osascript adds into an empty record.
+  return records.join(recSep) + recSep;
+})()`;
+
+  // ps reads the profile paths. It runs next to the window read, not after it.
+  const [stdout, fromPs] = await Promise.all([
+    runJxa(script),
+    listFirefoxProcesses(processName),
+  ]);
+
+  const launchTimeByPid = new Map<number, number>();
+  const windows: FirefoxWindow[] = [];
+  let trusted = true;
+
+  for (const record of stdout.split(RECORD_SEPARATOR)) {
+    if (record.trim().length === 0) continue;
+
+    const [rawPid, rawIndex, rawFlag, ...titleParts] =
+      record.split(FIELD_SEPARATOR);
+    const pid = Number.parseInt(rawPid, 10);
+    const index = Number.parseInt(rawIndex, 10);
+    if (!Number.isInteger(pid) || !Number.isInteger(index)) continue;
+
+    // Index -1 marks the permission line, index 0 a process line. Only a positive
+    // index is a window.
+    if (index === -1) {
+      trusted = rawFlag === "1";
+      continue;
+    }
+    if (index === 0) {
+      launchTimeByPid.set(pid, Number.parseInt(rawFlag, 10) || 0);
+      continue;
+    }
+
+    windows.push({
+      pid,
+      index,
+      minimized: rawFlag === "1",
+      // A title can never contain the field separator, but rejoin defensively.
+      title: titleParts.join(FIELD_SEPARATOR),
+    });
+  }
+
+  if (!trusted) {
+    throw new FirefoxControlError(
+      "Raycast cannot read the Firefox windows. Open System Settings > Privacy & Security > Accessibility and allow Raycast.",
+    );
+  }
+
+  const pathByPid = new Map(
+    fromPs.map((process) => [process.pid, process.profilePath]),
+  );
+  const processes: FirefoxProcess[] = Array.from(launchTimeByPid).map(
+    ([pid, launchTime]) => ({
+      pid,
+      launchTime,
+      profilePath: pathByPid.get(pid),
+    }),
+  );
+
+  return { processes, windows };
 }
 
 /** Read every window of every Firefox process. */
@@ -226,18 +292,92 @@ export async function listFirefoxWindows(
 }
 
 /**
- * Bring one Firefox window to the front of the screen and give it the keyboard focus.
+ * Bring the first usable candidate to the front of the screen.
  *
- * Every profile runs an application with the same name and the same bundle identifier,
- * so the process must be addressed by process ID. The tell block does that: it resolves
- * its target once and keeps the process ID. A stored process or window reference instead
- * degrades to one that names the application, and then acts on the wrong profile.
+ * A candidate is used only while its process still runs Firefox and still has the start
+ * time that was stored with it. That check replaces the ps call that the jump commands
+ * made before, and it also catches a process ID that macOS gave to another program.
  *
- * "set frontmost" also unhides the application, so a hidden profile needs no extra step.
+ * "activate" raises the window the profile used last, which is the window a jump wants,
+ * and it also unhides the application. The Accessibility API is used only to raise
+ * another window or to take a window out of the Dock, because each of its reads costs
+ * about 40 ms.
  */
+export async function activateFirefoxCandidates(
+  candidates: ActivationCandidate[],
+  options: { processName?: string; skipFrontmost?: boolean } = {},
+): Promise<ActivationResult> {
+  if (candidates.length === 0) {
+    return {};
+  }
+
+  const request = {
+    marker: executableMarker(options.processName ?? "firefox"),
+    skipFrontmost: options.skipFrontmost === true,
+    candidates: candidates.map((candidate) => ({
+      pid: candidate.pid,
+      key: candidate.key,
+      launchTime: candidate.launchTime ?? 0,
+      windowIndex: candidate.windowIndex ?? 1,
+      restore: candidate.restore === true,
+    })),
+  };
+
+  const script = `ObjC.import("AppKit");
+(function () {
+  const request = JSON.parse(${jsonLiteral(request)});
+  const frontPid = request.skipFrontmost
+    ? $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier
+    : 0;
+
+  for (const candidate of request.candidates) {
+    if (request.skipFrontmost && candidate.pid === frontPid) continue;
+
+    const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(candidate.pid);
+    if (app.isNil()) continue;
+
+    const url = app.executableURL;
+    if (url.isNil() || String(ObjC.unwrap(url.path)).indexOf(request.marker) === -1) continue;
+
+    if (candidate.launchTime > 0) {
+      const launchDate = app.launchDate;
+      if (launchDate.isNil()) continue;
+      if (Math.abs(Math.round(launchDate.timeIntervalSince1970) - candidate.launchTime) > 1) continue;
+    }
+
+    if (candidate.windowIndex > 1 || candidate.restore) {
+      ObjC.import("ApplicationServices");
+      const out = Ref();
+      if ($.AXUIElementCopyAttributeValue($.AXUIElementCreateApplication(candidate.pid), $("AXWindows"), out) === 0) {
+        const windows = ObjC.castRefToObject(out[0]);
+        if (candidate.windowIndex <= Number(windows.count)) {
+          const window = windows.objectAtIndex(candidate.windowIndex - 1);
+          $.AXUIElementSetAttributeValue(window, $("AXMinimized"), ObjC.wrap(false));
+          $.AXUIElementPerformAction(window, $("AXRaise"));
+        }
+      }
+    }
+
+    app.activateWithOptions($.NSApplicationActivateIgnoringOtherApps);
+    return JSON.stringify({ key: candidate.key, pid: candidate.pid });
+  }
+
+  return "{}";
+})()`;
+
+  const stdout = await runJxa(script);
+  try {
+    return JSON.parse(stdout.trim()) as ActivationResult;
+  } catch {
+    throw new FirefoxControlError("The automation script failed.");
+  }
+}
+
+/** Bring one window of one Firefox process to the front of the screen. */
 export async function activateFirefoxWindow(
   pid: number,
   windowIndex: number,
+  processName = "firefox",
 ): Promise<void> {
   if (
     !Number.isInteger(pid) ||
@@ -247,26 +387,13 @@ export async function activateFirefoxWindow(
     throw new FirefoxControlError("Invalid window reference.");
   }
 
-  await runOsascript(`
-tell application "System Events"
-  if (count of (every process whose unix id is ${pid})) is 0 then error "The Firefox process stopped." number 1000
-  tell ${processRef(pid)}
-    if (count of windows) < ${windowIndex} then error "The Firefox window was closed." number 1001
-    set frontmost to true
-    set wasMinimized to false
-    try
-      set wasMinimized to ((value of attribute "AXMinimized" of window ${windowIndex}) is true)
-    end try
-    if wasMinimized then
-      set value of attribute "AXMinimized" of window ${windowIndex} to false
-    else
-      try
-        perform action "AXRaise" of window ${windowIndex}
-      end try
-    end if
-  end tell
-end tell
-return "ok"`);
+  const result = await activateFirefoxCandidates(
+    [{ pid, key: String(pid), windowIndex, restore: true }],
+    { processName },
+  );
+  if (!result.key) {
+    throw new FirefoxControlError("The Firefox window is gone.");
+  }
 }
 
 /** Start Firefox with one profile directory. Use it when the profile has no running window. */

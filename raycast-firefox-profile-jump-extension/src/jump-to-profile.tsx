@@ -132,7 +132,7 @@ export default function Command() {
     async (window: FirefoxWindow, profileName: string) => {
       await closeMainWindow({ clearRootSearch: true });
       try {
-        await activateFirefoxWindow(window.pid, window.index);
+        await activateFirefoxWindow(window.pid, window.index, getProcessName());
         // "Jump to Last Firefox Profile" reads this history.
         await recordJump(profileName);
       } catch (error) {

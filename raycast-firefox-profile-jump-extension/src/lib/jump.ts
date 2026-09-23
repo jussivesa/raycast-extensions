@@ -1,11 +1,10 @@
-import { updateProfileCache, validCachedProfile } from "./cache";
+import { cachedCandidate, updateProfileCache } from "./cache";
 import {
+  ActivationCandidate,
   FirefoxControlError,
-  FirefoxProcess,
   FirefoxWindow,
-  activateFirefoxWindow,
-  listFirefoxProcesses,
-  listWindowsOfProcesses,
+  activateFirefoxCandidates,
+  readFirefoxState,
 } from "./firefox";
 import {
   TitleFormat,
@@ -15,71 +14,108 @@ import {
   windowsForProfile,
 } from "./profiles";
 
+export interface JumpResult {
+  /** Profile that was brought to the front. */
+  profileName: string;
+  pid: number;
+  /** True when the stored profile-to-process map was enough. */
+  fromCache: boolean;
+}
+
 /**
- * Bring the front window of one Firefox profile to the front of the screen.
+ * Bring the first profile of the list to the front that still has a running process.
  *
- * Reading every window title costs about one second, so the profile-to-process map from
- * the last read is used first. Reading the process list to check that map costs about
- * 50 ms. Every window title is read only when the map has no usable entry.
+ * The stored profile-to-process map answers the whole request in one automation call of
+ * about 90 ms. Nothing else runs first: the call checks the process itself and rejects an
+ * entry whose process stopped or whose process ID went to another program.
+ *
+ * Every window title is read only when no stored entry works. That read costs about
+ * 350 ms and it also stores a new map.
  */
-export async function jumpToProfile(
-  profileName: string,
-  options?: {
+export async function jumpToProfiles(
+  profileNames: string[],
+  options: {
+    /** Leave the profile that has the keyboard focus out of the list. */
+    skipFrontmost?: boolean;
+    /** Window data the caller already read. It skips both the cache and a new read. */
     windows?: FirefoxWindow[];
     format?: TitleFormat;
-    /** Process list the caller already read. It saves one ps call. */
-    processes?: FirefoxProcess[];
-  },
-): Promise<{ pid: number; windowIndex: number; fromCache: boolean }> {
-  const format = options?.format ?? getTitleFormat();
+  } = {},
+): Promise<JumpResult> {
   const processName = getProcessName();
-
-  // The caller already read the windows, so there is nothing to gain from the cache.
-  if (options?.windows) {
-    const target = selectWindow(options.windows, profileName, format);
-    await activateFirefoxWindow(target.pid, target.windowIndex);
-    return { ...target, fromCache: false };
+  const wanted = profileNames
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  if (wanted.length === 0) {
+    throw new FirefoxControlError("No profile given.");
   }
 
-  const processes =
-    options?.processes ?? (await listFirefoxProcesses(processName));
-  if (processes.length === 0) {
-    throw new FirefoxControlError("Firefox is not running.");
-  }
+  if (!options.windows) {
+    const candidates = wanted
+      .map((name) => cachedCandidate(name))
+      .filter((candidate): candidate is ActivationCandidate =>
+        Boolean(candidate),
+      );
 
-  const cached = validCachedProfile(profileName, processes);
-  if (cached) {
-    try {
-      // Window 1 is the front window of that process, which is the window last used.
-      await activateFirefoxWindow(cached.pid, 1);
-      return { pid: cached.pid, windowIndex: 1, fromCache: true };
-    } catch {
-      // The window list changed. Fall through and read the titles again.
+    const cached = await activateFirefoxCandidates(candidates, {
+      processName,
+      skipFrontmost: options.skipFrontmost,
+    });
+    if (cached.key !== undefined && cached.pid !== undefined) {
+      return { profileName: cached.key, pid: cached.pid, fromCache: true };
     }
   }
 
-  const windows = await listWindowsOfProcesses(
-    processes.map((process) => process.pid),
-  );
-  updateProfileCache(windows, processes, format);
+  // No stored entry worked. Read every window title once and store a new map.
+  const format = options.format ?? getTitleFormat();
+  let windows = options.windows;
+  if (!windows) {
+    const state = await readFirefoxState(processName);
+    if (state.processes.length === 0) {
+      throw new FirefoxControlError("Firefox is not running.");
+    }
+    updateProfileCache(state.windows, state.processes, format);
+    windows = state.windows;
+  }
 
-  const target = selectWindow(windows, profileName, format);
-  await activateFirefoxWindow(target.pid, target.windowIndex);
-  return { ...target, fromCache: false };
-}
+  const candidates: ActivationCandidate[] = [];
+  for (const name of wanted) {
+    const target = preferredWindow(windowsForProfile(windows, name, format));
+    if (target) {
+      candidates.push({
+        pid: target.pid,
+        key: name,
+        windowIndex: target.index,
+        restore: target.minimized,
+      });
+    }
+  }
 
-function selectWindow(
-  windows: FirefoxWindow[],
-  profileName: string,
-  format: TitleFormat,
-): { pid: number; windowIndex: number } {
-  const target = preferredWindow(
-    windowsForProfile(windows, profileName, format),
-  );
-  if (!target) {
+  if (candidates.length === 0) {
     throw new FirefoxControlError(
-      `No Firefox window found for profile "${profileName}".`,
+      wanted.length === 1
+        ? `No Firefox window found for profile "${wanted[0]}".`
+        : "No Firefox window found for these profiles.",
     );
   }
-  return { pid: target.pid, windowIndex: target.index };
+
+  const result = await activateFirefoxCandidates(candidates, {
+    processName,
+    skipFrontmost: options.skipFrontmost,
+  });
+  if (result.key === undefined || result.pid === undefined) {
+    throw new FirefoxControlError(
+      `No Firefox window found for profile "${wanted[0]}".`,
+    );
+  }
+
+  return { profileName: result.key, pid: result.pid, fromCache: false };
+}
+
+/** Bring the front window of one Firefox profile to the front of the screen. */
+export async function jumpToProfile(
+  profileName: string,
+  options: { windows?: FirefoxWindow[]; format?: TitleFormat } = {},
+): Promise<JumpResult> {
+  return jumpToProfiles([profileName], options);
 }

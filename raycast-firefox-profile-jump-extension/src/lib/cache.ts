@@ -1,6 +1,6 @@
 import { Cache } from "@raycast/api";
-import { FirefoxProcess, FirefoxWindow } from "./firefox";
-import { TitleFormat, detectProfiles } from "./profiles";
+import { ActivationCandidate, FirefoxProcess, FirefoxWindow } from "./firefox";
+import { TitleFormat, detectProfiles, preferredWindow } from "./profiles";
 
 const cache = new Cache({
   namespace: "raycast-firefox-profile-jump-extension",
@@ -12,8 +12,12 @@ export interface CachedProfile {
   pid: number;
   /** Profile directory of that process, when Firefox was started with one. */
   profilePath?: string;
+  /** Start time of that process. It rejects a process ID that macOS gave to another program. */
+  launchTime?: number;
   /** Number of windows the profile had. */
   windowCount: number;
+  /** True when every window of the profile was in the Dock. */
+  allMinimized?: boolean;
 }
 
 /** Profile name in lower case, mapped to the process that served it. */
@@ -41,34 +45,28 @@ export function clearProfileCache(): void {
   cache.remove(CACHE_KEY);
 }
 
-/**
- * Profile that the map holds for one process, in lower case.
- *
- * This answers which profile a window belongs to without a window read. Undefined
- * when the map is older than the process.
- */
-export function cachedProfileOfProcess(pid: number): string | undefined {
-  return Object.entries(readProfileCache()).find(
-    ([, entry]) => entry.pid === pid,
-  )?.[0];
-}
-
 /** Store the profile-to-process map that a window read produced. */
 export function updateProfileCache(
   windows: FirefoxWindow[],
   processes: FirefoxProcess[],
   format: TitleFormat,
 ): ProfileCache {
-  const pathByPid = new Map(
-    processes.map((process) => [process.pid, process.profilePath]),
+  const processByPid = new Map(
+    processes.map((process) => [process.pid, process]),
   );
   const entries: ProfileCache = {};
 
   for (const [profileName, profileWindows] of detectProfiles(windows, format)) {
+    // The window that a jump lands on decides which process the entry names.
+    const target = preferredWindow(profileWindows) ?? profileWindows[0];
+    const process = processByPid.get(target.pid);
+
     entries[profileName.toLowerCase()] = {
-      pid: profileWindows[0].pid,
-      profilePath: pathByPid.get(profileWindows[0].pid),
+      pid: target.pid,
+      profilePath: process?.profilePath,
+      launchTime: process?.launchTime,
       windowCount: profileWindows.length,
+      allMinimized: profileWindows.every((window) => window.minimized),
     };
   }
 
@@ -77,30 +75,28 @@ export function updateProfileCache(
 }
 
 /**
- * Return the cached process of one profile, but only while that process still runs
- * Firefox with the same profile directory. The check guards against a process ID that
- * macOS gave to another program after Firefox stopped.
+ * Turn one stored profile into an activation candidate.
+ *
+ * The candidate carries the start time, so the activation call rejects a stale entry by
+ * itself. No caller has to read the process list first.
  */
-export function validCachedProfile(
+export function cachedCandidate(
   profileName: string,
-  processes: FirefoxProcess[],
-): CachedProfile | undefined {
-  const entry = readProfileCache()[profileName.trim().toLowerCase()];
-  if (!entry) {
+  entries: ProfileCache = readProfileCache(),
+): ActivationCandidate | undefined {
+  const name = profileName.trim();
+  const entry = entries[name.toLowerCase()];
+  if (!entry || !Number.isInteger(entry.pid)) {
     return undefined;
   }
 
-  const live = processes.find((process) => process.pid === entry.pid);
-  if (!live) {
-    return undefined;
-  }
-  if (
-    entry.profilePath &&
-    live.profilePath &&
-    entry.profilePath !== live.profilePath
-  ) {
-    return undefined;
-  }
-
-  return entry;
+  return {
+    pid: entry.pid,
+    key: name,
+    launchTime: entry.launchTime,
+    // Window 1 is the window the profile used last, and "activate" raises it on its own.
+    windowIndex: 1,
+    // Only a profile whose windows were all in the Dock needs the Accessibility call.
+    restore: entry.allMinimized === true,
+  };
 }

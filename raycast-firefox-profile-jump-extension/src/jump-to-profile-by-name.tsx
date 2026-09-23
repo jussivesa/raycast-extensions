@@ -30,8 +30,8 @@ export default async function Command(
   try {
     const mapping = resolveMapping(await loadMappings(), query);
 
-    // A mapped profile takes the fast path: it needs no window titles when the
-    // profile-to-process map from the last read still holds.
+    // A mapped profile takes the fast path: one automation call that uses the stored
+    // profile-to-process map and reads no window title.
     if (mapping) {
       await jumpToProfile(mapping.profileName);
       await recordJump(mapping.profileName);
