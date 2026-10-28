@@ -139,6 +139,8 @@ These win over the template, because the result depends on them.
 | `sidebar.revamp` | `true` | Required for vertical tabs. |
 | `sidebar.visibility` | `always-show` | The sidebar stays open. |
 | `browser.startup.page` | `3` | Firefox reopens the tabs of that profile after a close. |
+| `browser.sessionstore.restore_on_demand` | `true` | A reopened tab loads on its first click, not at start. |
+| `browser.sessionstore.restore_pinned_tabs_on_demand` | `true` | The same for pinned tabs. |
 
 The built-in defaults below can be overridden by the template file.
 
@@ -171,8 +173,10 @@ profile and loads every tab once.
 Use `--warm-seconds 0` to skip it. The icons then appear one by one as you
 open the tabs yourself.
 
-Afterwards the profile has `browser.sessionstore.restore_on_demand` and
-`browser.sessionstore.restore_pinned_tabs_on_demand` set to `true`, so a tab
+The pass sets `browser.sessionstore.restore_on_demand` and
+`browser.sessionstore.restore_pinned_tabs_on_demand` to `false` in `user.js`
+for its own run only. After Firefox quits, the script writes both prefs as
+`true` into `prefs.js`. It also does this when the pass fails. A tab then
 loads when you click it, not at every start.
 
 ## How long the content lives

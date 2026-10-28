@@ -65,13 +65,20 @@ APPLE_EPOCH = 978307200  # Arc stores seconds since 2001-01-01 UTC.
 # untitled space "~", and that title is kept as the profile name.
 UNTITLED_PROFILE_NAME = "~"
 
+# A tab loads on its first click, not at every start. The warm-up pass turns
+# these off for its own run only.
+ON_DEMAND_PREFS = {
+    "browser.sessionstore.restore_on_demand": True,
+    "browser.sessionstore.restore_pinned_tabs_on_demand": True,
+}
+
 # Settings the migration depends on. These win over a captured template.
 REQUIRED_PREFS = {
     "sidebar.revamp": True,                          # needed for vertical tabs
     "sidebar.verticalTabs": True,                    # tabs on the side, like Arc
     "sidebar.visibility": "always-show",
     "browser.startup.page": 3,                       # reopen the last session
-}
+} | ON_DEMAND_PREFS
 
 # Settings every new profile gets. A profile-defaults.json file overrides them.
 BUILTIN_PREFS = {
@@ -570,11 +577,16 @@ def toolkit_profile_name(profile_dir):
 
 
 class FirefoxSession:
-    """Run Firefox headless on one profile with Marionette enabled."""
+    """Run Firefox headless on one profile with Marionette enabled.
 
-    def __init__(self, profile_dir, port):
+    prefs go into user.js for this run only. Firefox keeps a user.js value in
+    prefs.js after it quits, so set the value again when the run is done.
+    """
+
+    def __init__(self, profile_dir, port, prefs=None):
         self.profile_dir = profile_dir
         self.port = port
+        self.prefs = {"marionette.port": port} | (prefs or {})
         self.user_js = os.path.join(profile_dir, "user.js")
         self.user_js_backup = self.user_js + ".arc2firefox-backup"
         self.process = None
@@ -584,7 +596,9 @@ class FirefoxSession:
         if os.path.exists(self.user_js):
             shutil.copy2(self.user_js, self.user_js_backup)
         with open(self.user_js, "a", encoding="utf-8") as fh:
-            fh.write(f'\nuser_pref("marionette.port", {self.port});\n')
+            fh.write("\n")
+            for name, value in self.prefs.items():
+                fh.write(pref_line(name, value) + "\n")
         # --profile is the only form that starts Marionette reliably. With
         # the profile selector enabled, -P <name> stops at the selector window
         # and never opens the port. The cost of --profile is that Firefox
@@ -937,6 +951,29 @@ def read_prefs_js(profile_dir):
             except ValueError:
                 continue
     return prefs
+
+
+def pref_line(name, value):
+    return f"user_pref({json.dumps(name)}, {json.dumps(value)});"
+
+
+def write_prefs_js(profile_dir, prefs):
+    """Set prefs in prefs.js. Call it only while the profile is closed.
+
+    Firefox writes prefs.js when it quits and drops a change made while it ran.
+    """
+    path = os.path.join(profile_dir, "prefs.js")
+    lines = []
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                match = PREF_LINE.match(line.strip())
+                if not (match and match.group(1) in prefs):
+                    lines.append(line.rstrip("\n"))
+    lines += [pref_line(name, value) for name, value in prefs.items()]
+    with open(path + ".tmp", "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
+    os.replace(path + ".tmp", path)
 
 
 def wanted_pref(name):
@@ -1304,19 +1341,22 @@ def warm_tabs(profile_path, port, seconds):
     that for good. Afterwards the profile loads a tab only when you click it.
     """
     seen, total = 0, 0
-    with FirefoxSession(profile_path, port) as client:
-        client.script(CLEAN_TABS, [])
-        deadline = time.time() + seconds
-        while time.time() < deadline:
-            time.sleep(5)
-            status = json.loads(client.script(TAB_ICON_STATUS, []))
-            seen, total = status["withIcon"], status["total"]
-            if seen >= total - 1:
-                break
-        client.script(APPLY_SETTINGS, [json.dumps({"prefs": {
-            "browser.sessionstore.restore_on_demand": True,
-            "browser.sessionstore.restore_pinned_tabs_on_demand": True}})])
-        client.script(CLEAN_TABS, [])
+    load_all = {name: False for name in ON_DEMAND_PREFS}
+    try:
+        with FirefoxSession(profile_path, port, load_all) as client:
+            client.script(CLEAN_TABS, [])
+            deadline = time.time() + seconds
+            while time.time() < deadline:
+                time.sleep(5)
+                status = json.loads(client.script(TAB_ICON_STATUS, []))
+                seen, total = status["withIcon"], status["total"]
+                if seen >= total - 1:
+                    break
+            client.script(CLEAN_TABS, [])
+    finally:
+        # Firefox has quit. A failed pass must not leave the profile loading
+        # every tab at start.
+        write_prefs_js(profile_path, ON_DEMAND_PREFS)
     return seen, total
 
 
@@ -1359,11 +1399,7 @@ def do_migrate(spaces, port, force, defaults, screenshot_dir,
         if not os.path.exists(path):
             print(f"  warning: extension file not found, skipped: {path}")
 
-    prefs = dict(defaults["prefs"])
-    # The warm-up pass needs every tab to load once. It turns both prefs back
-    # on when it finishes, so the profile then loads a tab only on a click.
-    prefs["browser.sessionstore.restore_on_demand"] = warm_seconds <= 0
-    prefs["browser.sessionstore.restore_pinned_tabs_on_demand"] = warm_seconds <= 0
+    prefs = defaults["prefs"]
 
     print("\nWriting profiles")
     for space in spaces:
