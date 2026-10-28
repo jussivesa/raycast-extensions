@@ -188,6 +188,23 @@ For development with hot reload:
 npm run dev
 ```
 
+## Firefox update
+
+Every profile runs its own Firefox process. When a profile starts while an update waits, that
+process installs the update into `Firefox.app`. The profiles that already run keep the old
+version. They can then fail: a jump finds no window, or no profile matches.
+
+When a jump fails, the extension checks for these two states and shows this message instead of
+the error: quit Firefox in every profile (⌘Q) and open it again.
+
+| State | Check |
+| --- | --- |
+| An update is downloaded and waits | `~/Library/Caches/Mozilla/updates/<bundle path>/updates/0/update.status` starts with `pending` or `applied` |
+| A process runs an older version | The process started before the last change of `Firefox.app/Contents/Resources/application.ini` |
+
+**Jump to Firefox Profile** also shows the message as a toast when the list opens. The check
+takes about 100 ms and needs no Accessibility permission.
+
 ## Notes
 
 - A profile with no window shows **Not running**. **Launch Profile** starts it, but only when the

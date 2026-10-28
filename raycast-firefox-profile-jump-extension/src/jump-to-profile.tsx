@@ -14,6 +14,8 @@ import {
   FirefoxProcess,
   FirefoxWindow,
   activateFirefoxWindow,
+  explainFailure,
+  findWaitingUpdate,
   launchFirefoxProfile,
   readFirefoxState,
 } from "./lib/firefox";
@@ -48,7 +50,9 @@ function windowLabel(window: FirefoxWindow, position: number): string {
 
 /** Report a failure after the Raycast window is closed. A toast would not be visible then. */
 async function reportFailure(error: unknown): Promise<void> {
-  await showHUD(`⚠️ ${error instanceof Error ? error.message : String(error)}`);
+  await showHUD(
+    `⚠️ ${await explainFailure(error instanceof Error ? error.message : String(error))}`,
+  );
 }
 
 export default function Command() {
@@ -61,6 +65,9 @@ export default function Command() {
     const mappings = await loadMappings();
     const format = getTitleFormat();
 
+    // Runs next to the window read. It needs no Accessibility permission.
+    const waitingUpdate = findWaitingUpdate(getProcessName());
+
     let windows: FirefoxWindow[] = [];
     let processes: FirefoxProcess[] = [];
     try {
@@ -72,6 +79,15 @@ export default function Command() {
         style: Toast.Style.Failure,
         title: "Could not read Firefox windows",
         message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const updateMessage = await waitingUpdate;
+    if (updateMessage) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Firefox needs a restart",
+        message: updateMessage,
       });
     }
 

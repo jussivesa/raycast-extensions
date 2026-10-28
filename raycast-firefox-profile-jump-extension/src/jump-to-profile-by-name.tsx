@@ -1,6 +1,6 @@
 import { LaunchProps, closeMainWindow, showHUD } from "@raycast/api";
 import { updateProfileCache } from "./lib/cache";
-import { readFirefoxState } from "./lib/firefox";
+import { explainFailure, readFirefoxState } from "./lib/firefox";
 import { recordJump } from "./lib/history";
 import { jumpToProfile } from "./lib/jump";
 import {
@@ -51,7 +51,9 @@ export default async function Command(
       );
 
     if (!profileName) {
-      await showHUD(`⚠️ No Firefox profile matches "${query}".`);
+      await showHUD(
+        `⚠️ ${await explainFailure(`No Firefox profile matches "${query}".`)}`,
+      );
       return;
     }
 
@@ -59,7 +61,7 @@ export default async function Command(
     await recordJump(profileName);
   } catch (error) {
     await showHUD(
-      `⚠️ ${error instanceof Error ? error.message : String(error)}`,
+      `⚠️ ${await explainFailure(error instanceof Error ? error.message : String(error))}`,
     );
   }
 }

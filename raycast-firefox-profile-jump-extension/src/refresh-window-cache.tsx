@@ -1,6 +1,6 @@
 import { environment, showHUD } from "@raycast/api";
 import { updateProfileCache } from "./lib/cache";
-import { readFirefoxState } from "./lib/firefox";
+import { explainFailure, readFirefoxState } from "./lib/firefox";
 import { getProcessName, getTitleFormat } from "./lib/profiles";
 
 /**
@@ -20,13 +20,13 @@ export default async function Command() {
       await showHUD(
         names.length > 0
           ? `Cached ${names.length} Firefox profile${names.length === 1 ? "" : "s"}`
-          : "No Firefox profile found",
+          : `⚠️ ${await explainFailure("No Firefox profile found")}`,
       );
     }
   } catch (error) {
     if (environment.launchType === "userInitiated") {
       await showHUD(
-        `⚠️ ${error instanceof Error ? error.message : String(error)}`,
+        `⚠️ ${await explainFailure(error instanceof Error ? error.message : String(error))}`,
       );
     }
   }

@@ -1,4 +1,5 @@
 import { closeMainWindow, showHUD } from "@raycast/api";
+import { explainFailure } from "./lib/firefox";
 import { readHistory, recordJump } from "./lib/history";
 import { jumpToProfiles } from "./lib/jump";
 
@@ -27,7 +28,7 @@ export default async function Command() {
     await recordJump(result.profileName);
   } catch (error) {
     await showHUD(
-      `⚠️ ${error instanceof Error ? error.message : String(error)}`,
+      `⚠️ ${await explainFailure(error instanceof Error ? error.message : String(error))}`,
     );
   }
 }

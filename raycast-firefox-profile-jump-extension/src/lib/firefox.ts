@@ -1,4 +1,7 @@
 import { execFile } from "child_process";
+import { readFile, stat } from "fs/promises";
+import { homedir } from "os";
+import { join } from "path";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
@@ -414,4 +417,109 @@ export async function launchFirefoxProfile(profilePath: string): Promise<void> {
       error instanceof Error ? error.message : "Could not start Firefox.",
     );
   }
+}
+
+/** Values of update.status that mean the update waits for Firefox to quit. */
+const WAITING_UPDATE_STATUS = /^(pending|applied)/;
+
+/**
+ * Find a Firefox update that waits for Firefox to quit.
+ *
+ * Every profile runs its own Firefox process. When one process starts while an update
+ * waits, it installs the update into the application bundle. The processes that already
+ * run keep the old version, and they can stop working correctly: window titles and
+ * activation can then fail. Two states need a full quit of Firefox:
+ *
+ * - An update is downloaded and waits: update.status in the update directory starts
+ *   with "pending" or "applied".
+ * - A process started before the bundle changed: its start time is earlier than the
+ *   modification time of Contents/Resources/application.ini.
+ *
+ * Returns a message for the user, or undefined when no update waits.
+ */
+export async function findWaitingUpdate(
+  processName = "firefox",
+): Promise<string | undefined> {
+  const marker = executableMarker(processName);
+  const script = `ObjC.import("AppKit");
+(function () {
+  const marker = JSON.parse(${jsonLiteral(marker)});
+  const result = [];
+  const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
+  for (let i = 0; i < apps.count; i++) {
+    const app = apps.objectAtIndex(i);
+    const url = app.executableURL;
+    if (url.isNil() || String(ObjC.unwrap(url.path)).indexOf(marker) === -1) continue;
+    const bundle = app.bundleURL;
+    const launchDate = app.launchDate;
+    result.push({
+      bundle: bundle.isNil() ? "" : String(ObjC.unwrap(bundle.path)),
+      launchTime: launchDate.isNil() ? 0 : launchDate.timeIntervalSince1970,
+    });
+  }
+  return JSON.stringify(result);
+})()`;
+
+  let running: { bundle: string; launchTime: number }[];
+  try {
+    running = JSON.parse(await runJxa(script));
+  } catch {
+    return undefined;
+  }
+
+  const bundles = new Set(
+    running.map((app) => app.bundle).filter((bundle) => bundle.length > 0),
+  );
+  for (const bundle of bundles) {
+    // The update directory mirrors the bundle path:
+    // /Applications/Firefox.app -> ~/Library/Caches/Mozilla/updates/Applications/Firefox
+    const updateRoot = join(
+      homedir(),
+      "Library/Caches/Mozilla/updates",
+      bundle.replace(/^\/+/, "").replace(/\.app\/?$/, ""),
+    );
+    try {
+      const status = await readFile(
+        join(updateRoot, "updates/0/update.status"),
+        "utf8",
+      );
+      if (WAITING_UPDATE_STATUS.test(status.trim())) {
+        return "A Firefox update waits. Quit Firefox in every profile (⌘Q) to install it, then open Firefox again.";
+      }
+    } catch {
+      // No status file: no update was downloaded.
+    }
+
+    try {
+      const installed = await stat(
+        join(bundle, "Contents/Resources/application.ini"),
+      );
+      const installedTime = installed.mtimeMs / 1000;
+      // One second of tolerance for the rounding of the start time.
+      const outdated = running.some(
+        (app) =>
+          app.bundle === bundle &&
+          app.launchTime > 0 &&
+          app.launchTime + 1 < installedTime,
+      );
+      if (outdated) {
+        return "Firefox was updated while it ran. Quit Firefox in every profile (⌘Q), then open Firefox again.";
+      }
+    } catch {
+      // The bundle cannot be read. Make no claim.
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Replace an error message with the update message when a Firefox update waits.
+ * A waiting update is the more likely cause of a failed jump, and quitting fixes it.
+ */
+export async function explainFailure(
+  message: string,
+  processName = "firefox",
+): Promise<string> {
+  return (await findWaitingUpdate(processName)) ?? message;
 }
